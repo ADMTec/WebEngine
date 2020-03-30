@@ -1,11 +1,11 @@
 <?php
 /**
- * WebEngine
- * http://muengine.net/
+ * WebEngine CMS
+ * https://webenginecms.org/
  * 
- * @version 1.0.9
+ * @version 1.2.0
  * @author Lautaro Angelico <http://lautaroangelico.com/>
- * @copyright (c) 2013-2017 Lautaro Angelico, All Rights Reserved
+ * @copyright (c) 2013-2019 Lautaro Angelico, All Rights Reserved
  * 
  * Licensed under the MIT license
  * http://opensource.org/licenses/MIT
@@ -16,44 +16,14 @@ class login {
 	private $_config;
 	
 	function __construct() {
-		global $_SESSION, $dB, $dB2;
+		global $_SESSION;
 		
-		$this->common = new common($dB, $dB2);
-		$this->me = (config('SQL_USE_2_DB',true) ? $dB2 : $dB);
+		$this->common = new common();
+		$this->me = Connection::Database('Me_MuOnline');
 		
 		$loginConfigs = loadConfigurations('login');
-		if(!is_array($loginConfigs)) throw new Exception('Login configurations missing.');
+		if(!is_array($loginConfigs)) throw new Exception(lang('error_98'));
 		$this->_config = $loginConfigs;
-	}
-	
-	public function isLoggedIN() {
-		if(!$_SESSION['valid']) return;
-		if(!check_value($_SESSION['userid'])) return;
-		if(!check_value($_SESSION['username'])) return;
-		
-		if(!$this->checkActiveSession($_SESSION['userid'], session_id())) {
-			# session is inactive -> logout
-			$this->logout();
-			return;
-		}
-		
-		# update session time
-		$this->updateActiveSessionTime($_SESSION['userid']);
-		
-		# no session timeout
-		if(!$this->_config['enable_session_timeout']) return true;
-		
-		# session timeout is enabled
-		if(!$this->isSessionActive($_SESSION['timeout'])) {
-			# session timed out -> logout
-			$this->logout();
-			return;
-		}
-		
-		# update session data
-		$_SESSION['timeout'] = time();
-		
-		return true;
 	}
 	
 	public function validateLogin($username, $password) {
@@ -63,17 +33,20 @@ class login {
 		if(!$this->canLogin($_SERVER['REMOTE_ADDR'])) throw new Exception(lang('error_3',true));
 		if(!$this->common->userExists($username)) throw new Exception(lang('error_2',true));
 		if($this->common->validateUser($username,$password)) {
+			
+			$userId = $this->common->retrieveUserID($username);
+			if(!check_value($userId)) throw new Exception(lang('error_12',true));
+			
+			$accountData = $this->common->accountInformation($userId);
+			if(!is_array($accountData)) throw new Exception(lang('error_12',true));
+			
 			# login success
 			$this->removeFailedLogins($_SERVER['REMOTE_ADDR']);
 			session_regenerate_id();
 			$_SESSION['valid'] = true;
 			$_SESSION['timeout'] = time();
-			$_SESSION['userid'] = $this->common->retrieveUserID($username);
-			$_SESSION['username'] = $username;
-			
-			// ACTIVE SESSIONS
-			$this->deleteActiveSession($_SESSION['userid']);
-			$this->addActiveSession($_SESSION['userid'], $_SERVER['REMOTE_ADDR']);
+			$_SESSION['userid'] = $userId;
+			$_SESSION['username'] = $accountData[_CLMN_USERNM_];
 			
 			# redirect to usercp
 			redirect(1,'usercp/');
@@ -91,7 +64,7 @@ class login {
 		$failedLogins = $this->checkFailedLogins($ipaddress);
 		if($failedLogins < $this->_config['max_login_attempts']) return true;
 		
-		$result = $this->me->query_fetch_single("SELECT * FROM WEBENGINE_FLA WHERE ip_address = ? ORDER BY id DESC", array($ipaddress));
+		$result = $this->me->query_fetch_single("SELECT * FROM ".WEBENGINE_FLA." WHERE ip_address = ? ORDER BY id DESC", array($ipaddress));
 		if(!is_array($result)) return true;
 		if(time() < $result['unlock_timestamp']) return;
 		
@@ -101,7 +74,7 @@ class login {
 	
 	public function checkFailedLogins($ipaddress) {
 		if(!Validator::Ip($ipaddress)) return;
-		$result = $this->me->query_fetch_single("SELECT * FROM WEBENGINE_FLA WHERE ip_address = ? ORDER BY id DESC", array($ipaddress));
+		$result = $this->me->query_fetch_single("SELECT * FROM ".WEBENGINE_FLA." WHERE ip_address = ? ORDER BY id DESC", array($ipaddress));
 		if(!is_array($result)) return;
 		return $result['failed_attempts'];
 	}
@@ -119,56 +92,27 @@ class login {
 			# update
 			if(($failedLogins+1) >= $this->_config['max_login_attempts']) {
 				# max failed attemps -> block
-				$this->me->query("UPDATE WEBENGINE_FLA SET username = ?, ip_address = ?, failed_attempts = failed_attempts + 1, unlock_timestamp = ?, timestamp = ? WHERE ip_address = ?", array($username, $ipaddress, $timeout, time(), $ipaddress));
+				$this->me->query("UPDATE ".WEBENGINE_FLA." SET username = ?, ip_address = ?, failed_attempts = failed_attempts + 1, unlock_timestamp = ?, timestamp = ? WHERE ip_address = ?", array($username, $ipaddress, $timeout, time(), $ipaddress));
 			} else {
-				$this->me->query("UPDATE WEBENGINE_FLA SET username = ?, ip_address = ?, failed_attempts = failed_attempts + 1, timestamp = ? WHERE ip_address = ?", array($username, $ipaddress, time(), $ipaddress));
+				$this->me->query("UPDATE ".WEBENGINE_FLA." SET username = ?, ip_address = ?, failed_attempts = failed_attempts + 1, timestamp = ? WHERE ip_address = ?", array($username, $ipaddress, time(), $ipaddress));
 			}
 		} else {
 			# insert
 			$data = array($username, $ipaddress, 0, 1, time());
-			$this->me->query("INSERT INTO WEBENGINE_FLA (username, ip_address, unlock_timestamp, failed_attempts, timestamp) VALUES (?, ?, ?, ?, ?)", $data);
+			$this->me->query("INSERT INTO ".WEBENGINE_FLA." (username, ip_address, unlock_timestamp, failed_attempts, timestamp) VALUES (?, ?, ?, ?, ?)", $data);
 		}
 	
 	}
 	
 	public function removeFailedLogins($ipaddress) {
-		if(Validator::Ip($ipaddress)) return;
-		$this->me->query("DELETE FROM WEBENGINE_FLA WHERE ip_address = ?", array($ipaddress));
-	}
-	
-	public function isSessionActive($session_timeout) {
-		if(!check_value($session_timeout)) return;
-		$offset = time() - $session_timeout;
-		if($offset > $this->_config['session_timeout']) return;
-		return true;
+		if(!Validator::Ip($ipaddress)) return;
+		$this->me->query("DELETE FROM ".WEBENGINE_FLA." WHERE ip_address = ?", array($ipaddress));
 	}
 	
 	public function logout() {
 		$_SESSION = array();
 		session_destroy();
 		redirect();
-	}
-	
-	private function deleteActiveSession($userid) {
-		$this->me->query("DELETE FROM WEBENGINE_ACTIVE_SESSIONS WHERE session_user_id = ?", array($userid));
-	}
-	
-	private function addActiveSession($userid,$ipaddress) {
-		$add = $this->me->query("INSERT INTO WEBENGINE_ACTIVE_SESSIONS (session_user_id,session_id,session_ip,session_time) VALUES (?,?,?,?) ", array($userid,session_id(),$ipaddress,time()));
-		if(!$add) return;
-		return true;
-	}
-	
-	private function checkActiveSession($userid,$session_id) {
-		$check = $this->me->query_fetch_single("SELECT * FROM WEBENGINE_ACTIVE_SESSIONS WHERE session_user_id = ? AND session_id = ?", array($userid,$session_id));
-		if(!is_array($check)) return;
-		return true;
-	}
-	
-	private function updateActiveSessionTime($userid) {
-		$update = $this->me->query("UPDATE WEBENGINE_ACTIVE_SESSIONS SET session_time = ? WHERE session_user_id = ?", array(time(),$userid));
-		if(!$update) return;
-		return true;
 	}
 
 }

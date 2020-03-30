@@ -3,9 +3,9 @@
  * WebEngine CMS
  * https://webenginecms.org/
  * 
- * @version 1.0.9.8
+ * @version 1.2.0
  * @author Lautaro Angelico <http://lautaroangelico.com/>
- * @copyright (c) 2013-2017 Lautaro Angelico, All Rights Reserved
+ * @copyright (c) 2013-2019 Lautaro Angelico, All Rights Reserved
  * 
  * Licensed under the MIT license
  * http://opensource.org/licenses/MIT
@@ -13,7 +13,12 @@
 
 // check install directory
 if(file_exists(__ROOT_DIR__ . 'install/')) {
-	message('warning', 'Your WebEngine <strong>install</strong> directory still exists, it is recommended that you delete it.');
+	message('warning', 'Your WebEngine CMS <strong>install</strong> directory still exists, it is recommended that you rename or delete it.', 'WARNING');
+}
+
+// check web server host
+if(DIRECTORY_SEPARATOR == '\\') {
+	message('warning', 'Windows-based web servers are not officially supported by WebEngine CMS, it is recommended to use a Linux-based web server. For more information <a href="https://webenginecms.org/xampp" target="_blank">Click Here.</a>', 'WARNING');
 }
 
 echo '<div class="row">';
@@ -35,7 +40,7 @@ echo '<div class="row">';
 						echo '<em>'.phpversion().'</em>';
 					echo '</span>';
 				echo '</div>';
-				echo '<a href="http://muengine.net/" class="list-group-item" target="_blank">';
+				echo '<a href="https://webenginecms.org/" class="list-group-item" target="_blank">';
 					echo 'WebEngine';
 					echo '<span class="pull-right text-muted small">';
 						if(checkVersion()) echo '<span class="label label-danger">Update Available</span>  ';
@@ -77,7 +82,7 @@ echo '<div class="row">';
 				echo '</div>';
 				
 				// Scheduled Tasks
-				$scheduledTasks = $database->query_fetch_single("SELECT COUNT(*) as result FROM WEBENGINE_CRON");
+				$scheduledTasks = $database->query_fetch_single("SELECT COUNT(*) as result FROM ".WEBENGINE_CRON."");
 				echo '<div class="list-group-item">';
 					echo 'Scheduled Tasks (cron)';
 					echo '<span class="pull-right text-muted small">'.number_format($scheduledTasks['result']).'</span>';
@@ -104,6 +109,7 @@ echo '<div class="row">';
 	echo '<div class="col-md-6">';
 		echo '<div class="panel panel-default">';
 		echo '<div class="panel-body">';
+			echo '<div style="margin-bottom:7px;"><a href="https://forum.webenginecms.org/" class="btn btn-default" target="_blank">Support Forum</a> <a href="https://webenginecms.org/discord/" class="btn btn-default" target="_blank">Discord</a></div>';
 			echo '<iframe src="//www.facebook.com/plugins/likebox.php?href=https%3A%2F%2Fwww.facebook.com%2FMUE.WebEngine&amp;width=600&amp;height=447&amp;colorscheme=light&amp;show_faces=false&amp;header=false&amp;stream=true&amp;show_border=false&amp;appId=1439010682981422" scrolling="no" frameborder="0" style="border:none; overflow:hidden; width:100%; height:447px;" allowTransparency="true"></iframe>';
 		echo '</div>';
 		echo '</div>';

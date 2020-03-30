@@ -1,18 +1,18 @@
 <?php
 /**
- * WebEngine
- * http://muengine.net/
+ * WebEngine CMS
+ * https://webenginecms.org/
  * 
- * @version 1.0.9
+ * @version 1.1.0
  * @author Lautaro Angelico <http://lautaroangelico.com/>
- * @copyright (c) 2013-2017 Lautaro Angelico, All Rights Reserved
+ * @copyright (c) 2013-2019 Lautaro Angelico, All Rights Reserved
  * 
  * Licensed under the MIT license
  * http://opensource.org/licenses/MIT
  */
 
-// ACCESS
-define('admincp', true);
+// access
+define('access', 'admincp');
 
 try {
 	
@@ -63,7 +63,6 @@ $admincpSidebar = array(
 		"creditsconfigs" => "Credit Configurations",
 		"creditsmanager" => "Credit Manager",
 		"latestpaypal" => "PayPal Donations",
-		"latestsr" => "SuperRewards Donations",
 		"topvotes" => "Top Voters",
 	), "fa-money"),
 	array("Website Configuration", array(
@@ -141,11 +140,14 @@ $admincpSidebar = array(
                     <ul class="nav" id="side-menu">
 						<?php
 							foreach($admincpSidebar as $sidebarItem) {
-								if(check_value($_GET['module']) && array_key_exists($_GET['module'], $sidebarItem[1])) {
-									echo '<li class="active">';
-								} else {
-									echo '<li>';
+								$active = '';
+								if(isset($_GET['module'])) {
+									if(array_key_exists($_GET['module'], $sidebarItem[1])) {
+										$active = ' class="active"';
+									}
 								}
+								
+								echo '<li'.$active.'>';
 									$itemIcon = (check_value($sidebarItem[2]) ? '<i class="fa '.$sidebarItem[2].' fa-fw"></i>&nbsp;' : '');
 									if(is_array($sidebarItem[1])) {
 										echo '<a href="#">'.$itemIcon.$sidebarItem[0].'<span class="fa arrow"></span></a>';
@@ -160,7 +162,7 @@ $admincpSidebar = array(
 								echo '</li>';
 							}
 							
-							if(check_value($extra_admincp_sidebar)) {
+							if(isset($extra_admincp_sidebar)) {
 								if(is_array($extra_admincp_sidebar)) {
 									echo '<li>';
 										echo '<a href="#"><i class="fa fa-square fa-fw"></i>Active Plugins<span class="fa arrow"></span></a>';
@@ -191,8 +193,10 @@ $admincpSidebar = array(
         <div id="page-wrapper">
             <div class="row contentpadding">
                 <div class="col-lg-12">
-                    <!--<h1 class="page-header">Dashboard</h1>-->
-					<?php $handler->loadAdminCPModule($_REQUEST['module']); ?>
+					<?php
+						$req = isset($_REQUEST['module']) ? $_REQUEST['module'] : '';
+						$handler->loadAdminCPModule($req);
+					?>
                 </div>
             </div>
         </div>
